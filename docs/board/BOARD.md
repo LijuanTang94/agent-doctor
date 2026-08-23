@@ -21,7 +21,7 @@ Design notes that shaped the split:
 |-------|-----------|---------|-----------------|-------------|
 | t-000 | developer | none    | openclaw/t-000  | IN PROGRESS |
 | t-001 | developer | t-000   | openclaw/t-001  | READY_FOR_REVIEW |
-| t-002 | developer | t-001   | openclaw/t-002  | TODO        |
+| t-002 | developer | t-001   | openclaw/t-002  | READY_FOR_REVIEW |
 
 ---
 
@@ -94,6 +94,13 @@ ACCEPTANCE:
 - README/docs match the implementation.
 VERIFY (QA): `pytest -q` → ≥30 passed including test_demo_b, in a hook-provisioned
 worktree with real command output.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m pytest -q` → `33 passed` (29
+original + 4 new in `tests/test_demo_b.py`, covering scenario construction, the
+end-to-end SAFE_TO_REVIEW pipeline, and `config_layer_capability_conflict`
+being top-ranked and selected). `./.venv/bin/python -m examples.demo_b.run_demo`
+still ends `DECISION: SAFE_TO_REVIEW`, unchanged. Added `docs/demo_b.md` and
+updated README package layout + Status. No files under `src/`, `examples/`,
+`trace/`, `replay/`, or `attribution/` were touched.
 
 ## Process / discipline
 - One task = one worktree = one branch (lowercase names).

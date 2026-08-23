@@ -83,6 +83,7 @@ src/agentdoctor/
   regression/     original/variants/unrelated verification gate
   cli.py          `agentdoctor` command line
 examples/demo_a/  the synthetic incident scenario + end-to-end script
+examples/demo_b/  the cron/toolsAllow capability-conflict scenario + end-to-end script
 tests/            pytest suite covering every module above
 ```
 
@@ -95,7 +96,9 @@ section 16.2 for the full list.
 
 ## Status
 
-MVP skeleton with a working, tested end-to-end path (Demo A). The
-Bayesian experiment planner (V1), production trace ingestion, managed
-sandbox fleet, and historical incident intelligence described in the
-product plan's commercial layer (section 18.2) are not implemented here.
+MVP skeleton with two working, tested end-to-end paths: Demo A (a
+model/retry-state incident) and Demo B (a cron/toolsAllow config-layer vs.
+backend capability conflict — see `docs/demo_b.md`). The Bayesian
+experiment planner (V1), production trace ingestion, managed sandbox
+fleet, and historical incident intelligence described in the product
+plan's commercial layer (section 18.2) are not implemented here.
