@@ -45,6 +45,12 @@ class InterventionSpec:
     # Serving / orchestrator layer
     retry_clear_stale_observation: bool | None = None
 
+    # Config / orchestration layer: e.g. session_target, payload_type --
+    # routing-level knobs that live outside the model/prompt/tool/retrieval
+    # stack (spec section 10.1's "every supported variable layer" is meant
+    # to grow; this is the config-layer slot).
+    config_overrides: dict[str, str] = field(default_factory=dict)
+
     def describe(self) -> str:
         parts = []
         if self.model_override:
@@ -64,6 +70,8 @@ class InterventionSpec:
             parts.append(f"retrieval={self.retrieval_mode}")
         if self.retry_clear_stale_observation is not None:
             parts.append(f"clear_stale_observation={self.retry_clear_stale_observation}")
+        for key, value in self.config_overrides.items():
+            parts.append(f"config[{key}]={value}")
         return ", ".join(parts) if parts else "baseline (no intervention)"
 
 

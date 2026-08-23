@@ -21,6 +21,7 @@ REPAIR_LADDER: dict[str, tuple[str, int]] = {
     "normalize_latency": ("serving / infra config patch", 4),
     "tool_schema_ablation": ("tool description / schema patch", 3),
     "gold_context": ("retrieval configuration patch", 5),
+    "config_layer_capability_conflict": ("orchestration / session-routing config patch", 2),
     "model_swap": ("adapter / fine-tune (avoid unless nothing else fits)", 7),
 }
 
