@@ -35,10 +35,14 @@ DELIVERABLES:
 - `docs/board/BOARD.md` (this file)
 ACCEPTANCE:
 - Both files committed on openclaw/t-000; hook has the executable bit in git.
-- A freshly created managed worktree off this branch auto-runs the hook and
-  prints `29 passed`.
-VERIFY (QA): create a new managed worktree with base-ref openclaw/t-000; the
-creation output shows the hook running and `29 passed`.
+- The hook selects a Python >=3.10 interpreter and, when run inside a fresh
+  managed worktree, builds the venv and prints `29 passed`.
+- Auto-trigger on worktree creation activates once t-000 lands on main (the
+  source checkout must carry the hook on its current branch for OpenClaw to run
+  it automatically); until merge, the hook is verified by running it manually in
+  a fresh worktree.
+VERIFY (QA): create a new managed worktree off openclaw/t-000, run
+`bash .openclaw/worktree-setup.sh` inside it, and observe the venv build + `29 passed`.
 
 ## TASK t-001 — demo_b scenario, five stages, SAFE_TO_REVIEW
 OWNER: developer   DEPENDS: t-000   BRANCH: openclaw/t-001 (base openclaw/t-000)

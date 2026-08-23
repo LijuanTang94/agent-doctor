@@ -6,7 +6,21 @@
 set -euo pipefail
 
 echo "[worktree-setup] $(pwd)"
-python3 -m venv .venv
+
+# pyproject requires Python >=3.10; the system python3 may be older (e.g. 3.9.6),
+# which fails `pip install -e .[dev]` before pytest ever runs. Pick the newest
+# available interpreter that satisfies the floor, else fail loudly.
+PY=""
+for c in python3.13 python3.12 python3.11 python3.10; do
+  if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+done
+if [ -z "$PY" ]; then
+  echo "[worktree-setup] ERROR: no Python >=3.10 interpreter found (pyproject requires >=3.10)" >&2
+  exit 1
+fi
+echo "[worktree-setup] using $PY ($("$PY" --version 2>&1))"
+
+"$PY" -m venv .venv
 ./.venv/bin/pip install -q --upgrade pip
 ./.venv/bin/pip install -q -e ".[dev]"
 
