@@ -20,7 +20,7 @@ Design notes that shaped the split:
 | Task  | Owner     | Depends | Branch          | Status      |
 |-------|-----------|---------|-----------------|-------------|
 | t-000 | developer | none    | openclaw/t-000  | IN PROGRESS |
-| t-001 | developer | t-000   | openclaw/t-001  | TODO        |
+| t-001 | developer | t-000   | openclaw/t-001  | READY_FOR_REVIEW |
 | t-002 | developer | t-001   | openclaw/t-002  | TODO        |
 
 ---
@@ -73,6 +73,11 @@ ACCEPTANCE:
 - Existing 29 tests still pass.
 VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_b.run_demo`
 → SAFE_TO_REVIEW; `pytest -q` → still ≥29 passed.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_b.run_demo` prints
+`DECISION: SAFE_TO_REVIEW`; the `config_layer_capability_conflict` hypothesis is
+top-ranked (effect +0.98, 95% CI excludes 0) and selected as the repair, while
+the other hypotheses (latency/retry/model-swap) show effect 0.00 (inconclusive).
+`./.venv/bin/python -m pytest -q` → `29 passed`.
 
 ## TASK t-002 — tests + docs + README
 OWNER: developer   DEPENDS: t-001   BRANCH: openclaw/t-002 (base openclaw/t-001)

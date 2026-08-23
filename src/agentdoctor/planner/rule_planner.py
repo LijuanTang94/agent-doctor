@@ -85,6 +85,33 @@ def plan_experiments(trace: Trace) -> list[Hypothesis]:
             )
         )
 
+    # config-layer / backend-capability conflict: a step hard-errored in a
+    # way that's flagged (or reads) as two independent config/orchestration
+    # layers stacking (e.g. a session-isolation layer force-attaching a
+    # constraint that a downstream backend refuses to accept), rather than
+    # a model, prompt, tool-latency, or retrieval problem.
+    capability_conflict_steps = [
+        s
+        for s in steps
+        if s.provenance.get("capability_conflict")
+        or (s.error and "cannot enforce" in s.error.lower())
+    ]
+    if capability_conflict_steps:
+        hypotheses.append(
+            Hypothesis(
+                name="config_layer_capability_conflict",
+                spec=InterventionSpec(
+                    config_overrides={"session_target": "main", "payload_type": "systemEvent"}
+                ),
+                prior=0.45,
+                rationale=(
+                    "a config/orchestration layer is force-attaching a constraint that an "
+                    "unrelated backend hard-errors on; test rerouting session_target/payload "
+                    "to bypass the execution path that injects the conflicting config"
+                ),
+            )
+        )
+
     # Always keep a competing "it's the model" hypothesis in the mix (section
     # 11.2: never test only the favorite explanation).
     hypotheses.append(
