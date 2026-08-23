@@ -1,0 +1,33 @@
+[project]
+name = "agentdoctor"
+version = "0.1.0"
+description = "Root-cause your AI agent with experiments, not guesses."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "click>=8.1",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+openai = [
+    "openai>=1.30",
+]
+
+[project.scripts]
+agentdoctor = "agentdoctor.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
