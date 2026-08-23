@@ -19,9 +19,9 @@ Design notes that shaped the split:
 
 | Task  | Owner     | Depends | Branch          | Status      |
 |-------|-----------|---------|-----------------|-------------|
-| t-000 | developer | none    | openclaw/t-000  | IN PROGRESS |
-| t-001 | developer | t-000   | openclaw/t-001  | READY_FOR_REVIEW |
-| t-002 | developer | t-001   | openclaw/t-002  | READY_FOR_REVIEW |
+| t-000 | developer | none    | openclaw/t-000  | DONE |
+| t-001 | developer | t-000   | openclaw/t-001  | DONE |
+| t-002 | developer | t-001   | openclaw/t-002  | DONE |
 
 ---
 
@@ -43,6 +43,8 @@ ACCEPTANCE:
   a fresh worktree.
 VERIFY (QA): create a new managed worktree off openclaw/t-000, run
 `bash .openclaw/worktree-setup.sh` inside it, and observe the venv build + `29 passed`.
+STATUS: DONE. reviewer APPROVED, qa PASS — hook builds `.venv` with Python >=3.10
+and prints `29 passed` in a fresh managed worktree.
 
 ## TASK t-001 — demo_b scenario, five stages, SAFE_TO_REVIEW
 OWNER: developer   DEPENDS: t-000   BRANCH: openclaw/t-001 (base openclaw/t-000)
@@ -78,6 +80,7 @@ STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_b.run_demo` print
 top-ranked (effect +0.98, 95% CI excludes 0) and selected as the repair, while
 the other hypotheses (latency/retry/model-swap) show effect 0.00 (inconclusive).
 `./.venv/bin/python -m pytest -q` → `29 passed`.
+DONE. reviewer APPROVED, qa PASS.
 
 ## TASK t-002 — tests + docs + README
 OWNER: developer   DEPENDS: t-001   BRANCH: openclaw/t-002 (base openclaw/t-001)
@@ -101,6 +104,7 @@ being top-ranked and selected). `./.venv/bin/python -m examples.demo_b.run_demo`
 still ends `DECISION: SAFE_TO_REVIEW`, unchanged. Added `docs/demo_b.md` and
 updated README package layout + Status. No files under `src/`, `examples/`,
 `trace/`, `replay/`, or `attribution/` were touched.
+DONE. reviewer APPROVED, qa PASS.
 
 ## Process / discipline
 - One task = one worktree = one branch (lowercase names).
