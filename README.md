@@ -84,6 +84,7 @@ src/agentdoctor/
   cli.py          `agentdoctor` command line
 examples/demo_a/  the synthetic incident scenario + end-to-end script
 examples/demo_b/  the cron/toolsAllow capability-conflict scenario + end-to-end script
+examples/demo_c/  the codesFlow_bot intermittent empty-output scenario + end-to-end script
 tests/            pytest suite covering every module above
 ```
 
@@ -96,9 +97,12 @@ section 16.2 for the full list.
 
 ## Status
 
-MVP skeleton with two working, tested end-to-end paths: Demo A (a
-model/retry-state incident) and Demo B (a cron/toolsAllow config-layer vs.
-backend capability conflict — see `docs/demo_b.md`). The Bayesian
-experiment planner (V1), production trace ingestion, managed sandbox
-fleet, and historical incident intelligence described in the product
-plan's commercial layer (section 18.2) are not implemented here.
+MVP skeleton with three working, tested end-to-end paths: Demo A (a
+model/retry-state incident), Demo B (a cron/toolsAllow config-layer vs.
+backend capability conflict — see `docs/demo_b.md`), and Demo C (the
+`codesFlow_bot` intermittent empty-output incident, an unconfirmed-root-cause
+case whose selected fix is a retry/state-clear mitigation rather than a
+proven fix — see `docs/demo_c.md`). The Bayesian experiment planner (V1),
+production trace ingestion, managed sandbox fleet, and historical incident
+intelligence described in the product plan's commercial layer (section 18.2)
+are not implemented here.
