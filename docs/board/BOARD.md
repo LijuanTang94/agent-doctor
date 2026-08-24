@@ -151,8 +151,8 @@ Design notes that shaped the split:
 
 | Task  | Owner     | Depends | Branch          | Status      |
 |-------|-----------|---------|-----------------|-------------|
-| t-003 | developer | t-002   | openclaw/t-003  | IN PROGRESS |
-| t-004 | developer | t-003   | openclaw/t-004  | READY_FOR_REVIEW |
+| t-003 | developer | t-002   | openclaw/t-003  | DONE |
+| t-004 | developer | t-003   | openclaw/t-004  | DONE |
 
 ---
 
@@ -182,7 +182,7 @@ ACCEPTANCE:
 VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_c.run_demo`
 → `SAFE_TO_REVIEW`; `pytest -q` → still ≥33 passed; `examples.demo_a` and
 `examples.demo_b` run_demo unchanged (still `SAFE_TO_REVIEW`).
-STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_c.run_demo`
+STATUS: DONE. `./.venv/bin/python -m examples.demo_c.run_demo`
 prints `DECISION: SAFE_TO_REVIEW`; `clear_stale_retry_state` is top-ranked
 (effect +0.35, 95% CI [+0.23, +0.47], excludes 0) and selected as the patch,
 while `normalize_latency:claude_cli_invoke` and `model_swap` both show effect
@@ -192,6 +192,7 @@ failure rate 0.37 (75 runs, seed 42); theoretical/verify-suite baseline ~33%,
 matching the ~1/3 target. `./.venv/bin/python -m pytest -q` → `33 passed`
 (unchanged). Output confirmed byte-identical across two runs (fixed seed).
 No planner/repair-engine change was required.
+DONE. reviewer APPROVED, qa PASS.
 
 ## TASK t-004 — tests + docs for demo_c
 OWNER: developer   DEPENDS: t-003   BRANCH: openclaw/t-004 (base openclaw/t-003)
@@ -212,7 +213,7 @@ ACCEPTANCE:
   root-cause distinction.
 VERIFY (QA): `pytest -q` → ≥34 passed including test_demo_c, in a
 hook-provisioned worktree with real command output.
-STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m pytest -q` → `37 passed` (33
+STATUS: DONE. `./.venv/bin/python -m pytest -q` → `37 passed` (33
 original + 4 new in `tests/test_demo_c.py`, covering scenario construction, the
 end-to-end SAFE_TO_REVIEW pipeline, and `clear_stale_retry_state` being
 top-ranked and selected). `./.venv/bin/python -m examples.demo_c.run_demo`
@@ -224,3 +225,4 @@ both still end `DECISION: SAFE_TO_REVIEW` (no regression). Added
 and the mitigation-vs-fix distinction) and updated README package layout +
 Status. No files under `src/`, `examples/`, `trace/`, `replay/`, or
 `attribution/` were touched.
+DONE. reviewer APPROVED, qa PASS.
