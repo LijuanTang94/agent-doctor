@@ -152,7 +152,7 @@ Design notes that shaped the split:
 | Task  | Owner     | Depends | Branch          | Status      |
 |-------|-----------|---------|-----------------|-------------|
 | t-003 | developer | t-002   | openclaw/t-003  | IN PROGRESS |
-| t-004 | developer | t-003   | openclaw/t-004  | TODO        |
+| t-004 | developer | t-003   | openclaw/t-004  | READY_FOR_REVIEW |
 
 ---
 
@@ -212,4 +212,15 @@ ACCEPTANCE:
   root-cause distinction.
 VERIFY (QA): `pytest -q` → ≥34 passed including test_demo_c, in a
 hook-provisioned worktree with real command output.
-STATUS: TODO.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m pytest -q` → `37 passed` (33
+original + 4 new in `tests/test_demo_c.py`, covering scenario construction, the
+end-to-end SAFE_TO_REVIEW pipeline, and `clear_stale_retry_state` being
+top-ranked and selected). `./.venv/bin/python -m examples.demo_c.run_demo`
+still ends `DECISION: SAFE_TO_REVIEW`, unchanged, with `clear_stale_retry_state`
+top-ranked (effect +0.35, 95% CI excludes 0). `./.venv/bin/python -m
+examples.demo_a.run_demo` and `./.venv/bin/python -m examples.demo_b.run_demo`
+both still end `DECISION: SAFE_TO_REVIEW` (no regression). Added
+`docs/demo_c.md` (honestly framing the suspected-but-unconfirmed root cause
+and the mitigation-vs-fix distinction) and updated README package layout +
+Status. No files under `src/`, `examples/`, `trace/`, `replay/`, or
+`attribution/` were touched.
