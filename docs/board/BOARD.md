@@ -226,3 +226,69 @@ and the mitigation-vs-fix distinction) and updated README package layout +
 Status. No files under `src/`, `examples/`, `trace/`, `replay/`, or
 `attribution/` were touched.
 DONE. reviewer APPROVED, qa PASS.
+
+---
+
+# BOARD — agent-doctor / EPIC-003 (demo_e)
+
+Baseline: **37 passed** is the floor (33 from EPIC-002 + 4 from
+`tests/test_demo_c.py`). It may only rise, never fall.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-006 | developer | none    | openclaw/t-006  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-006 — demo_e (stale-reference incident), five stages, SAFE_TO_REVIEW
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-006 (base origin/main)
+OBJECTIVE: Reproduce, as a fully self-contained synthetic scenario, a
+STALE-REFERENCE failure class: a worker branches its task off a locally-stale
+`main`, so its base is missing already-merged code, and the build hard-errors
+on a missing symbol/module that exists on the true tip. Drive all five stages
+Observe → Intervene → Attribute → Repair → Verify so the pipeline attributes
+this to a stale-input-state cause and selects the existing, unmodified
+`clear_stale_retry_state` repair-ladder rung, ending `DECISION:
+SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_e/__init__.py`, `examples/demo_e/scenario.py`,
+  `examples/demo_e/run_demo.py` (mirrors demo_c's structure and CLI:
+  `python -m examples.demo_e.run_demo`).
+- `tests/test_demo_e.py` covering scenario construction, the end-to-end
+  SAFE_TO_REVIEW pipeline, and that `clear_stale_retry_state` is selected.
+- No planner or repair-engine changes — the existing `clear_stale_retry_state`
+  rule and ladder rung (same one demo_a and demo_c already reuse) is reused
+  as-is. The only new semantics live in `StaleBaseRebaseScenario
+  .apply_intervention`, which interprets that intervention as "refetch
+  origin/main + rebase the worker branch onto the true tip", distinct from
+  demo_a's and demo_c's own interpretations of the same intervention spec.
+- This BOARD.md EPIC-003 section.
+CONSTRAINTS: no new third-party deps; no data/cassette files; do NOT change the
+behavior of demo_a, demo_b, demo_c, trace/, replay/, attribution/, planner/,
+repair/, regression/, or any `src/` file.
+ACCEPTANCE:
+- `python -m examples.demo_e.run_demo` runs all five stages and prints
+  `DECISION: SAFE_TO_REVIEW`, with `clear_stale_retry_state` top-ranked
+  (positive effect, 95% CI excludes 0) and selected as the patch, while the
+  unrelated regression-control suite's failure rate is essentially unchanged
+  (delta ~0).
+- `pytest -q` count rises from 37 (new cases green); the original 37 still
+  pass; demo_a, demo_b, demo_c run_demo all still end `DECISION:
+  SAFE_TO_REVIEW`, byte-for-byte unchanged behavior.
+VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_e.run_demo`
+→ `SAFE_TO_REVIEW`; `pytest -q` → ≥41 passed including test_demo_e; `examples.
+demo_a`, `examples.demo_b`, `examples.demo_c` run_demo unchanged (still
+`SAFE_TO_REVIEW`); `git show --stat HEAD` shows only additive files under
+`examples/demo_e/`, `tests/test_demo_e.py`, and `docs/board/BOARD.md`.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_e.run_demo`
+prints `DECISION: SAFE_TO_REVIEW`; `clear_stale_retry_state` is top-ranked
+(effect +0.37, 95% CI [+0.25, +0.49], excludes 0) and selected as the patch,
+while `normalize_latency:worker_build` and `model_swap` both show effect
++0.00 (inconclusive). Verify suite: original 36.50%→3.00%, variants
+32.00%→3.00%, unrelated 5.00%→5.00% (delta +0.00%, no regression).
+`./.venv/bin/python -m pytest -q` → `41 passed` (37 original + 4 new in
+`tests/test_demo_e.py`). `./.venv/bin/python -m examples.demo_a.run_demo`,
+`.demo_b.`, and `.demo_c.` all still end `DECISION: SAFE_TO_REVIEW`
+(no regression). No planner/repair-engine change was required; no files
+under `src/`, `examples/demo_a`, `examples/demo_b`, `examples/demo_c`,
+`trace/`, `replay/`, or `attribution/` were touched.
