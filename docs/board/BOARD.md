@@ -378,3 +378,92 @@ while `normalize_latency:worker_build` and `model_swap` both show effect
 under `src/`, `examples/demo_a`, `examples/demo_b`, `examples/demo_c`,
 `trace/`, `replay/`, or `attribution/` were touched.
 DONE. reviewer APPROVED, qa PASS.
+
+---
+
+# BOARD — agent-doctor / EPIC-004 (demo_g no-progress tool loop)
+
+Baseline: **49 passed** is the floor (this task adds no new tests; only
+`examples/demo_g/*` and this board section). It may only rise, never fall.
+
+t-008 branches directly off `openclaw/epic-003` (independent of any sibling
+EPIC-004 task; the CEO reconciles any BOARD overlap at integration).
+
+Design notes that shaped the split:
+- demo_g models a NO-PROGRESS TOOL LOOP: a `ticket-triage-agent` re-issues
+  the exact same `list_open_tickets` tool call -- identical args, identical
+  observation, identical `Step.state_hash` -- with no state change between
+  calls, until it gives up. It reuses demo_c/demo_e's self-contained
+  synthetic-RNG approach -- no data files, no API key, no network.
+- Reuse-first, strictly additive: the existing rule planner (V0) already
+  proposes a `tool_schema_ablation` hypothesis whenever a trace shows the
+  same `tool_name` called more than once (`rule_planner.py`'s
+  `repeated_tools` gate, `Counter(tool_name ...); c > 1`). Shaping the
+  demo_g incident trace to repeat `list_open_tickets` five times was enough
+  to trigger it -- **no planner or repair-engine change was needed**; both
+  stay byte-for-byte as EPIC-003 left them.
+- `NoProgressToolLoopScenario.apply_intervention` wires the existing generic
+  `InterventionSpec.prompt_overrides["tool_disambiguation"]` field to mean
+  "inject a check-before-repeat instruction": once wired, the agent compares
+  the would-be repeat call's state against the last call and pivots to
+  escalation instead of looping again, which drives the failure rate to
+  near zero. No other hypothesis (`model_swap`, or any that fail to fire at
+  all given this trace has no retry/error/slow-tool/thin-retrieval signal)
+  is wired, so they measure `+0.00` (inconclusive), matching demo_c's
+  technique for isolating the winning hypothesis.
+- `Step.state_hash` (already defined in `trace/schema.py`, previously
+  unused by any demo) is set identically across the repeated calls to
+  encode "no state change"; this is informational for the narrative and is
+  not required by the planner's gate.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-008 | developer | none    | openclaw/t-008  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-008 — demo_g (no-progress tool loop), five stages, SAFE_TO_REVIEW
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-008 (base openclaw/epic-003)
+OBJECTIVE: Reproduce, as a fully self-contained synthetic scenario, a
+NO-PROGRESS TOOL LOOP: the agent repeats the same tool call with no state
+change. Drive all five stages Observe → Intervene → Attribute → Repair →
+Verify so the pipeline selects the existing `tool_schema_ablation`
+repair-ladder rung (rung 3, "tool description/schema patch") and ends
+`DECISION: SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_g/__init__.py`, `examples/demo_g/scenario.py`,
+  `examples/demo_g/run_demo.py` (mirrors demo_c/demo_e's structure and CLI:
+  `python -m examples.demo_g.run_demo`).
+- No planner or repair-engine changes -- the existing `tool_schema_ablation`
+  rule and ladder rung are reused as-is (see design notes above).
+- This BOARD.md EPIC-004 section.
+CONSTRAINTS: no new third-party deps; no data/cassette files; do NOT change
+the behavior of demo_a/b/c/d/e, trace/, replay/, attribution/, planner/,
+repair/, regression/, or any other `src/` file.
+ACCEPTANCE:
+- `python -m examples.demo_g.run_demo` runs all five stages and prints
+  `DECISION: SAFE_TO_REVIEW`, with `tool_schema_ablation` top-ranked
+  (positive effect, 95% CI excludes 0) and selected as the patch, while the
+  unrelated regression-control suite's failure rate is unchanged (delta
+  +0.00%).
+- `pytest -q` stays at 49 passed (no regression; t-008 adds no tests);
+  demo_a, demo_b, demo_c, demo_e run_demo all still end `DECISION:
+  SAFE_TO_REVIEW`, byte-for-byte unchanged behavior.
+- `git show --stat HEAD` additive-only: exactly `examples/demo_g/*` and
+  `docs/board/BOARD.md`.
+VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_g.run_demo`
+→ `SAFE_TO_REVIEW`; `pytest -q` → 49 passed; `examples.demo_a`,
+`examples.demo_b`, `examples.demo_c`, `examples.demo_e` run_demo unchanged
+(still `SAFE_TO_REVIEW`); `git show --stat HEAD` additive-only.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_g.run_demo`
+prints `DECISION: SAFE_TO_REVIEW`; `tool_schema_ablation` is top-ranked
+(effect +0.58, 95% CI [+0.48, +0.68], excludes 0) and selected as the patch,
+while `model_swap` shows effect +0.00 (inconclusive). Verify suite:
+original 58.00%→3.00%, variants 54.00%→3.00%, unrelated 5.00%→5.00% (delta
++0.00%, no regression). `./.venv/bin/python -m pytest -q` → `49 passed`
+(unchanged; no new tests added, per constraints).
+`./.venv/bin/python -m examples.demo_a.run_demo`, `.demo_b.`, `.demo_c.`, and
+`.demo_e.` all still end `DECISION: SAFE_TO_REVIEW` (no regression). No
+planner/repair-engine change was required; no files under `src/`,
+`examples/demo_a`, `examples/demo_b`, `examples/demo_c`, `examples/demo_d`,
+`examples/demo_e`, `trace/`, `replay/`, or `attribution/` were touched.
