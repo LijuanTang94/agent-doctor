@@ -226,3 +226,98 @@ and the mitigation-vs-fix distinction) and updated README package layout +
 Status. No files under `src/`, `examples/`, `trace/`, `replay/`, or
 `attribution/` were touched.
 DONE. reviewer APPROVED, qa PASS.
+
+---
+
+# BOARD — agent-doctor / EPIC-003 (demo_d, environment vs code attribution)
+
+Baseline: **37 passed** is the floor (33 from EPIC-002 + 4 from
+`tests/test_demo_c.py`). It may only rise, never fall.
+
+Chain: **t-005** only (single task, no dependency chain), branched directly
+off `origin/main` (which carries demo_a, demo_b, demo_c, the worktree hook,
+and this board).
+
+Design notes that shaped the split:
+- Not every incident diagnose() sees has a code-level fix. demo_a/b/c all
+  model incidents where *some* InterventionSpec layer is the right lever.
+  demo_d models the opposite case: a sandbox-permission-denied incident (a
+  `write_file` call refused by a read-only-filesystem policy) where NO
+  InterventionSpec layer (model/prompt/tool-latency/retry/retrieval/config)
+  has any bearing on an OS-level permission decision. The pipeline must
+  recognize that and stop, rather than silently reporting "no confident
+  repair found" and leaving a human to guess why.
+- New module `src/agentdoctor/environment.py` adds one pure function,
+  `classify(trace, effects) -> str | None`, returning the new terminal
+  decision `ENVIRONMENT_BLOCKED` iff a step's existing free-form
+  `provenance` dict reports `environment_blocked=True` AND no tested
+  hypothesis shows a confident, positive code-level fix. A confident
+  positive effect always wins (precedence rule, unit-tested): direct causal
+  evidence that some code-level lever controls the outcome contradicts "this
+  can't be fixed in code".
+- Reuse-first, strictly additive: `provenance` is the same free-form dict
+  `rule_planner.py` already reads via `s.provenance.get("capability_conflict")`;
+  no new Pydantic/dataclass field was added to `Step`. No planner rule and no
+  repair-ladder entry were added -- the ~0-effect property falls out
+  naturally because `demo_d`'s `apply_intervention` wires no
+  `InterventionSpec` field to the environment failure, the same technique
+  `demo_c` uses for its inconclusive hypotheses. `regression/runner.py`'s
+  `VerificationReport.decision` (the only place `SAFE_TO_REVIEW` is produced)
+  was not touched.
+- `demo_d/run_demo.py` stops at diagnosis: it calls `diagnose()`, then
+  `agentdoctor.environment.classify()`, and if that returns
+  `ENVIRONMENT_BLOCKED` it prints the decision and returns -- it never calls
+  `best_repair()` or `verify()`.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-005 | developer | none    | openclaw/t-005  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-005 — environment vs code attribution + demo_d, ENVIRONMENT_BLOCKED
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-005 (base origin/main)
+OBJECTIVE: Add a new, self-contained "environment vs code" attribution
+capability plus demo_d (a sandbox-permission-denied incident correctly
+attributed to an ENVIRONMENT limitation, NOT a code bug), emitting a new
+terminal decision `ENVIRONMENT_BLOCKED`. Strictly additive -- no edits to any
+existing `src/agentdoctor/*.py` file.
+DELIVERABLES:
+- `src/agentdoctor/environment.py` (`ENVIRONMENT_BLOCKED`, `classify()`).
+- `examples/demo_d/__init__.py`, `examples/demo_d/scenario.py`,
+  `examples/demo_d/run_demo.py` (mirrors demo_c's structure).
+- `tests/test_environment.py` (unit tests classify() in isolation, incl. the
+  precedence rule) and `tests/test_demo_d.py` (concrete, non-tautological
+  assertions on the scenario, the diagnose report, and the classification).
+- This BOARD.md EPIC-003 section.
+CONSTRAINTS: additive only; no new third-party deps; do NOT change the
+behavior of demo_a, demo_b, demo_c, trace/, replay/, attribution/, planner/,
+repair/, regression/.
+ACCEPTANCE:
+- `pytest -q` passes, count strictly > 37, includes `test_environment.py` and
+  `test_demo_d.py`.
+- `python -m examples.demo_d.run_demo` prints `DECISION: ENVIRONMENT_BLOCKED`
+  and does not print a `SUGGESTED PATCH` section or call `verify()`.
+- `python -m examples.demo_a.run_demo`, `.demo_b.`, `.demo_c.` all still end
+  `DECISION: SAFE_TO_REVIEW`, byte-for-byte unchanged.
+- `git show --stat HEAD` shows only the additive files listed above.
+VERIFY (QA): in a hook-provisioned worktree, `pytest -q` → >37 passed;
+`python -m examples.demo_d.run_demo` → `DECISION: ENVIRONMENT_BLOCKED`;
+demo_a/b/c unchanged at `SAFE_TO_REVIEW`; `git show --stat HEAD` additive-only.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m pytest -q` → `45 passed` (37
+original + 5 new in `tests/test_environment.py` + 3 new in
+`tests/test_demo_d.py`). `./.venv/bin/python -m examples.demo_d.run_demo`
+prints `DECISION: ENVIRONMENT_BLOCKED` and stops at diagnosis (no `SUGGESTED
+PATCH`, `verify()` never called) -- every planner hypothesis
+(`clear_stale_retry_state`, `normalize_latency:write_file`, `model_swap`)
+measures effect `+0.00` and is inconclusive, because `apply_intervention`
+wires none of them to the sandbox-permission failure.
+`./.venv/bin/python -m examples.demo_a.run_demo`,
+`./.venv/bin/python -m examples.demo_b.run_demo`, and
+`./.venv/bin/python -m examples.demo_c.run_demo` all still end `DECISION:
+SAFE_TO_REVIEW`, unchanged. `git show --stat HEAD` touches only
+`src/agentdoctor/environment.py`, `examples/demo_d/__init__.py`,
+`examples/demo_d/scenario.py`, `examples/demo_d/run_demo.py`,
+`tests/test_environment.py`, `tests/test_demo_d.py`, and
+`docs/board/BOARD.md`.
+Awaiting reviewer APPROVED / qa PASS.
