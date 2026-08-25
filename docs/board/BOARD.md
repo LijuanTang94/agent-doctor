@@ -649,3 +649,64 @@ standalone. `./.venv/bin/python -m examples.demo_a.run_demo` and
 SAFE_TO_REVIEW` (no regression; `mitigation.classify` has no callers).
 No `src/` file besides the new `mitigation.py` was touched; `regression/
 runner.py`'s `VerificationReport.decision` cascade was not edited.
+
+---
+
+## TASK t-010 — demo_h, the first `mitigation.classify` caller
+OWNER: developer   DEPENDS: t-009   BRANCH: openclaw/t-010 (base openclaw/t-009)
+OBJECTIVE: Add `examples/demo_h`, a new self-contained synthetic scenario
+where a real repair passes the regression gate
+(`verification.decision == "SAFE_TO_REVIEW"`) but only masks the root
+cause, so `mitigation.classify(trace, patch, verification)` (t-009) returns
+`MITIGATION_ONLY`, and `run_demo` surfaces that as a caution annotation
+alongside the `SAFE_TO_REVIEW` decision. Strictly additive -- no edits to
+`mitigation.py`, `regression/runner.py`, any existing demo, or any existing
+test.
+SCENARIO: `PoolExhaustionRaceScenario` -- a leaked-connection race under
+concurrent initialization intermittently exhausts a health-check worker's
+connection pool (`PoolExhaustedError`, ~1/3 of checks, content-independent),
+mirroring the structure of Demo A/C/E (same `clear_stale_retry_state`
+repair-ladder rung, reused verbatim, no planner/repair-engine change). The
+incident's failing step's `provenance` carries an independent
+`masks_root_cause=True` signal: clearing stale pool-lease state before a
+retry clears the regression gate but does not touch the leaked-connection
+race, so `classify` fires `MITIGATION_ONLY` even though the verdict is
+`SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_h/{__init__.py,scenario.py,run_demo.py}` (runnable via
+  `python -m examples.demo_h.run_demo`).
+- `tests/test_demo_h.py`, mirroring `tests/test_demo_e.py`'s structure plus
+  one additional assertion that `mitigation.classify` returns
+  `MITIGATION_ONLY` on the verified repair.
+- This BOARD.md entry.
+CONSTRAINTS: additive only; no edits to `src/agentdoctor/mitigation.py`,
+`src/agentdoctor/regression/runner.py`, any existing demo, or any existing
+test; no new third-party deps.
+ACCEPTANCE:
+- `./.venv/bin/python -m examples.demo_h.run_demo` ends `DECISION:
+  SAFE_TO_REVIEW` and additionally prints a `MITIGATION_ONLY` caution
+  annotation (from `mitigation.classify`).
+- `./.venv/bin/python -m pytest -q` → count strictly > 54 (includes
+  `test_demo_h.py`).
+- `./.venv/bin/python -m pytest -q tests/test_demo_h.py -v` passes
+  standalone.
+- `demo_a`/`demo_b`/`demo_c`/`demo_e` `run_demo` each still end `DECISION:
+  SAFE_TO_REVIEW`, unchanged.
+- `git show --stat HEAD` additive-only: only `examples/demo_h/*`,
+  `tests/test_demo_h.py`, `docs/board/BOARD.md`; nothing under `src/`
+  modified.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_h.run_demo`
+prints `DECISION: SAFE_TO_REVIEW` followed by `CAUTION: MITIGATION_ONLY --
+this repair clears the regression gate (SAFE_TO_REVIEW) but the incident
+trace reports it only masks the root cause`; `clear_stale_retry_state` is
+top-ranked (effect +0.36, 95% CI [+0.24, +0.48], excludes 0) and selected
+as the patch. Verify suite: original 35.00%→3.00%, variants 32.00%→3.00%,
+unrelated 5.00%→5.00% (delta +0.00%, no regression).
+`./.venv/bin/python -m pytest -q` → `58 passed` (54 baseline + 4 new in
+`tests/test_demo_h.py`). `./.venv/bin/python -m pytest -q
+tests/test_demo_h.py -v` → `4 passed` standalone.
+`./.venv/bin/python -m examples.demo_a.run_demo`, `.demo_b.`, `.demo_c.`,
+and `.demo_e.` all still end `DECISION: SAFE_TO_REVIEW` (no regression).
+No file under `src/` (including `mitigation.py` and `regression/runner.py`)
+or any existing demo/test was touched; only `examples/demo_h/*`,
+`tests/test_demo_h.py`, and this `docs/board/BOARD.md` entry were added.
