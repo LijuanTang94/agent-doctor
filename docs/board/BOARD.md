@@ -378,3 +378,335 @@ while `normalize_latency:worker_build` and `model_swap` both show effect
 under `src/`, `examples/demo_a`, `examples/demo_b`, `examples/demo_c`,
 `trace/`, `replay/`, or `attribution/` were touched.
 DONE. reviewer APPROVED, qa PASS.
+
+---
+
+# BOARD — agent-doctor / EPIC-004 (demo_f unpropagated tool error)
+
+Baseline: **49 passed** is the floor (37 from EPIC-003's start + 8 across
+`tests/test_environment.py`, `tests/test_demo_d.py`, and
+`tests/test_demo_e.py`). It may only rise, never fall.
+
+Chain: **t-007** (demo_f), branched directly off `openclaw/epic-003`.
+
+Design notes that shaped the split:
+- demo_f models a fourth distinct incident class: an UNPROPAGATED TOOL
+  ERROR. A `fetch_shipment_status` tool call hard-errors, but the agent's
+  response loop never checks the step's `error` field before answering --
+  it proceeds anyway, falling back to a stale, previously-cached
+  observation, and confidently reports that stale status as the answer to
+  THIS request. The tool error never reaches the user; the agent simply
+  produces a wrong `final_output`.
+- Reuse-first, no new rule: the existing rule planner (V0) already proposes
+  a `clear_stale_retry_state` hypothesis whenever a trace shows a retry OR
+  an error/timeout signal (`rule_planner.py`'s `has_retry or
+  has_error_or_timeout or slow_tools` gate). Giving the failed
+  `fetch_shipment_status` step a real `error` string was enough to trigger
+  it -- no planner or repair-engine change was needed; both stay
+  byte-for-byte as EPIC-003 left them.
+- The only new semantics live in
+  `IgnoredToolErrorScenario.apply_intervention`, which interprets the
+  existing generic `InterventionSpec.retry_clear_stale_observation` field as
+  "halt on tool error and retry instead of silently answering from a stale
+  observation" -- the same field-reuse pattern demo_c (clear stale
+  retry/session state) and demo_e (refetch + rebase onto the true tip)
+  already use, each with its own scenario-local interpretation.
+  `normalize_latency:fetch_shipment_status` is intentionally left unwired,
+  so it measures `+0.00` (inconclusive) and `clear_stale_retry_state` wins
+  `best_repair()`'s risk-rank sort outright.
+- Honest framing: this is a mitigation (retry-before-answering discipline),
+  not a root-cause fix for whatever makes the upstream fulfillment API time
+  out on ~1/3 of calls.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-007 | developer | none    | openclaw/t-007  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-007 — demo_f (unpropagated tool error), five stages, SAFE_TO_REVIEW
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-007 (base openclaw/epic-003)
+OBJECTIVE: Reproduce, as a fully self-contained synthetic scenario, an
+UNPROPAGATED TOOL ERROR failure class: a tool call errors, the agent ignores
+it and proceeds, producing a wrong final answer. Drive all five stages
+Observe → Intervene → Attribute → Repair → Verify so the pipeline attributes
+this to a stale-observation-on-error cause and selects the existing,
+unmodified `clear_stale_retry_state` repair-ladder rung, ending `DECISION:
+SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_f/__init__.py`, `examples/demo_f/scenario.py`,
+  `examples/demo_f/run_demo.py` (mirrors demo_c's/demo_e's structure and
+  CLI: `python -m examples.demo_f.run_demo`).
+- No planner or repair-engine changes -- the existing
+  `clear_stale_retry_state` rule and ladder rung (the same one demo_a,
+  demo_c, and demo_e already reuse) is reused as-is. The only new semantics
+  live in `IgnoredToolErrorScenario.apply_intervention`, which interprets
+  that intervention as "halt on tool error and retry instead of answering
+  from a stale observation", distinct from demo_c's and demo_e's own
+  interpretations of the same intervention spec.
+- This BOARD.md EPIC-004 section.
+CONSTRAINTS: no new third-party deps; no data/cassette files; do NOT change
+the behavior of demo_a, demo_b, demo_c, demo_d, demo_e, trace/, replay/,
+attribution/, planner/, repair/, regression/, or any `src/` file.
+ACCEPTANCE:
+- `python -m examples.demo_f.run_demo` runs all five stages and prints
+  `DECISION: SAFE_TO_REVIEW`, with `clear_stale_retry_state` top-ranked
+  (positive effect, 95% CI excludes 0) and selected as the patch, while the
+  unrelated regression-control suite's failure rate is essentially
+  unchanged (delta ~0).
+- `pytest -q` count stays at 49 (t-007 adds no new tests); the original 49
+  still pass; demo_a, demo_b, demo_c, demo_e run_demo all still end
+  `DECISION: SAFE_TO_REVIEW`, byte-for-byte unchanged behavior.
+VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_f.run_demo`
+→ `SAFE_TO_REVIEW`; `pytest -q` → still 49 passed; `examples.demo_a`,
+`examples.demo_b`, `examples.demo_c`, `examples.demo_e` run_demo unchanged
+(still `SAFE_TO_REVIEW`); `git show --stat HEAD` shows only additive files
+under `examples/demo_f/` and `docs/board/BOARD.md`.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_f.run_demo`
+prints `DECISION: SAFE_TO_REVIEW`; `clear_stale_retry_state` is top-ranked
+(effect +0.37, 95% CI [+0.25, +0.49], excludes 0) and selected as the patch,
+while `normalize_latency:fetch_shipment_status` and `model_swap` both show
+effect +0.00 (inconclusive). Verify suite: original 36.50%→3.00%, variants
+32.00%→3.00%, unrelated 5.00%→5.00% (delta +0.00%, no regression).
+`./.venv/bin/python -m pytest -q` → `49 passed` (unchanged; t-007 adds no
+tests). `./.venv/bin/python -m examples.demo_a.run_demo`, `.demo_b.`,
+`.demo_c.`, and `.demo_e.` all still end `DECISION: SAFE_TO_REVIEW` (no
+regression). No planner/repair-engine change was required; no files under
+`src/`, `examples/demo_a`, `examples/demo_b`, `examples/demo_c`,
+`examples/demo_d`, `examples/demo_e`, `trace/`, `replay/`, or `attribution/`
+were touched.
+
+---
+
+# BOARD — agent-doctor / EPIC-004 (demo_g no-progress tool loop)
+
+Baseline: **49 passed** is the floor (this task adds no new tests; only
+`examples/demo_g/*` and this board section). It may only rise, never fall.
+
+t-008 branches directly off `openclaw/epic-003` (independent of any sibling
+EPIC-004 task; the CEO reconciles any BOARD overlap at integration).
+
+Design notes that shaped the split:
+- demo_g models a NO-PROGRESS TOOL LOOP: a `ticket-triage-agent` re-issues
+  the exact same `list_open_tickets` tool call -- identical args, identical
+  observation, identical `Step.state_hash` -- with no state change between
+  calls, until it gives up. It reuses demo_c/demo_e's self-contained
+  synthetic-RNG approach -- no data files, no API key, no network.
+- Reuse-first, strictly additive: the existing rule planner (V0) already
+  proposes a `tool_schema_ablation` hypothesis whenever a trace shows the
+  same `tool_name` called more than once (`rule_planner.py`'s
+  `repeated_tools` gate, `Counter(tool_name ...); c > 1`). Shaping the
+  demo_g incident trace to repeat `list_open_tickets` five times was enough
+  to trigger it -- **no planner or repair-engine change was needed**; both
+  stay byte-for-byte as EPIC-003 left them.
+- `NoProgressToolLoopScenario.apply_intervention` wires the existing generic
+  `InterventionSpec.prompt_overrides["tool_disambiguation"]` field to mean
+  "inject a check-before-repeat instruction": once wired, the agent compares
+  the would-be repeat call's state against the last call and pivots to
+  escalation instead of looping again, which drives the failure rate to
+  near zero. No other hypothesis (`model_swap`, or any that fail to fire at
+  all given this trace has no retry/error/slow-tool/thin-retrieval signal)
+  is wired, so they measure `+0.00` (inconclusive), matching demo_c's
+  technique for isolating the winning hypothesis.
+- `Step.state_hash` (already defined in `trace/schema.py`, previously
+  unused by any demo) is set identically across the repeated calls to
+  encode "no state change"; this is informational for the narrative and is
+  not required by the planner's gate.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-008 | developer | none    | openclaw/t-008  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-008 — demo_g (no-progress tool loop), five stages, SAFE_TO_REVIEW
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-008 (base openclaw/epic-003)
+OBJECTIVE: Reproduce, as a fully self-contained synthetic scenario, a
+NO-PROGRESS TOOL LOOP: the agent repeats the same tool call with no state
+change. Drive all five stages Observe → Intervene → Attribute → Repair →
+Verify so the pipeline selects the existing `tool_schema_ablation`
+repair-ladder rung (rung 3, "tool description/schema patch") and ends
+`DECISION: SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_g/__init__.py`, `examples/demo_g/scenario.py`,
+  `examples/demo_g/run_demo.py` (mirrors demo_c/demo_e's structure and CLI:
+  `python -m examples.demo_g.run_demo`).
+- No planner or repair-engine changes -- the existing `tool_schema_ablation`
+  rule and ladder rung are reused as-is (see design notes above).
+- This BOARD.md EPIC-004 section.
+CONSTRAINTS: no new third-party deps; no data/cassette files; do NOT change
+the behavior of demo_a/b/c/d/e, trace/, replay/, attribution/, planner/,
+repair/, regression/, or any other `src/` file.
+ACCEPTANCE:
+- `python -m examples.demo_g.run_demo` runs all five stages and prints
+  `DECISION: SAFE_TO_REVIEW`, with `tool_schema_ablation` top-ranked
+  (positive effect, 95% CI excludes 0) and selected as the patch, while the
+  unrelated regression-control suite's failure rate is unchanged (delta
+  +0.00%).
+- `pytest -q` stays at 49 passed (no regression; t-008 adds no tests);
+  demo_a, demo_b, demo_c, demo_e run_demo all still end `DECISION:
+  SAFE_TO_REVIEW`, byte-for-byte unchanged behavior.
+- `git show --stat HEAD` additive-only: exactly `examples/demo_g/*` and
+  `docs/board/BOARD.md`.
+VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_g.run_demo`
+→ `SAFE_TO_REVIEW`; `pytest -q` → 49 passed; `examples.demo_a`,
+`examples.demo_b`, `examples.demo_c`, `examples.demo_e` run_demo unchanged
+(still `SAFE_TO_REVIEW`); `git show --stat HEAD` additive-only.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_g.run_demo`
+prints `DECISION: SAFE_TO_REVIEW`; `tool_schema_ablation` is top-ranked
+(effect +0.58, 95% CI [+0.48, +0.68], excludes 0) and selected as the patch,
+while `model_swap` shows effect +0.00 (inconclusive). Verify suite:
+original 58.00%→3.00%, variants 54.00%→3.00%, unrelated 5.00%→5.00% (delta
++0.00%, no regression). `./.venv/bin/python -m pytest -q` → `49 passed`
+(unchanged; no new tests added, per constraints).
+`./.venv/bin/python -m examples.demo_a.run_demo`, `.demo_b.`, `.demo_c.`, and
+`.demo_e.` all still end `DECISION: SAFE_TO_REVIEW` (no regression). No
+planner/repair-engine change was required; no files under `src/`,
+`examples/demo_a`, `examples/demo_b`, `examples/demo_c`, `examples/demo_d`,
+`examples/demo_e`, `trace/`, `replay/`, or `attribution/` were touched.
+
+---
+
+# BOARD — agent-doctor / EPIC-004 (mitigation-only annotation + demo_h)
+
+Baseline: **49 passed** is the floor, confirmed by running `pytest -q` on a
+clean checkout of `openclaw/epic-003` @ `cbfba37` before adding any files.
+It may only rise, never fall.
+
+Chain: **t-009** (this task, the pure `mitigation.classify` annotation, no
+callers) gates **t-010** (demo_h, which will be the first caller), both
+branched off `openclaw/epic-003`.
+
+Design notes that shaped the split:
+- `VerificationReport.decision` (spec section 14, `regression/runner.py`)
+  proves a patch clears the regression gate: the original incident improves,
+  variants don't overfit, and unrelated suites don't regress. That gate says
+  nothing about *why* the patch works -- a patch can silence the failing
+  symptom (e.g. widen a timeout, swallow an error, retry until it happens to
+  pass) without touching the upstream defect that produced the failure. t-009
+  adds a new, purely additive terminal annotation, `MITIGATION_ONLY`, that
+  flags exactly that case on top of an unmodified `SAFE_TO_REVIEW` verdict.
+- New module `src/agentdoctor/mitigation.py` adds one pure function,
+  `classify(trace, patch, verification) -> str | None`, mirroring
+  `environment.py`'s shape one stage later in the pipeline: it fires iff a
+  real repair exists and passed verification (`patch is not None` and
+  `verification.decision == "SAFE_TO_REVIEW"`) AND a step's existing
+  free-form `provenance` dict independently reports
+  `masks_root_cause=True` -- the same "two independent signals" precedence
+  pattern `environment.py` already uses (provenance signal independent of
+  the failure-rate math), just checked against the opposite side of the
+  gate (only *after* a clean SAFE_TO_REVIEW, not instead of it).
+- Reuse-first, strictly additive: no edit to `regression/runner.py` or its
+  `VerificationReport.decision` cascade, no new dataclass field on `Step`,
+  `Patch`, or `VerificationReport`. `mitigation.classify` has zero callers in
+  this task -- t-010's `demo_h` will be the first caller -- so it cannot
+  change any existing demo's output.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-009 | developer | none    | openclaw/t-009  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-009 — mitigation-only annotation, MITIGATION_ONLY
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-009 (base openclaw/epic-003)
+OBJECTIVE: Add a new, self-contained terminal annotation `MITIGATION_ONLY`
+that flags a real, regression-clean `SAFE_TO_REVIEW` repair which nonetheless
+only masks the symptom rather than fixing the root cause. Strictly additive
+-- no edits to `regression/runner.py`'s `VerificationReport.decision` cascade
+or any other existing `src/agentdoctor/*.py` file. No callers yet (t-010's
+demo_h will be the first).
+DELIVERABLES:
+- `src/agentdoctor/mitigation.py` (`MITIGATION_ONLY`, `classify()`).
+- `tests/test_mitigation.py` (unit tests for `classify()` in isolation: hand-
+  built `Trace`/`Patch`/`VerificationReport` fixtures, mirroring
+  `test_environment.py`'s structure).
+- This BOARD.md EPIC-004 section.
+CONSTRAINTS: additive only; no new third-party deps; do NOT change the
+behavior of demo_a, demo_b, demo_c, demo_d, demo_e, or any existing `src/`
+file, including `regression/runner.py`.
+ACCEPTANCE:
+- `pytest -q` passes, count strictly > 49 (baseline on `openclaw/epic-003`),
+  includes `test_mitigation.py`.
+- `pytest -q tests/test_mitigation.py -v` passes standalone (5 cases).
+- `demo_a`/`demo_b`/`demo_c`/`demo_e` `run_demo` all still end
+  `DECISION: SAFE_TO_REVIEW`, unchanged (mitigation has no callers).
+- `git show --stat HEAD` additive-only: exactly `src/agentdoctor/mitigation.py`,
+  `tests/test_mitigation.py`, `docs/board/BOARD.md`. `regression/runner.py` is
+  NOT in the diff.
+VERIFY (QA): in a hook-provisioned worktree off `openclaw/epic-003`,
+`pytest -q` → 54 passed (49 baseline + 5 new in `test_mitigation.py`);
+`pytest -q tests/test_mitigation.py -v` → 5 passed; `examples.demo_a` and
+`examples.demo_c` `run_demo` unchanged (still `SAFE_TO_REVIEW`); `git show
+--stat HEAD` shows only additive files under `src/agentdoctor/mitigation.py`,
+`tests/test_mitigation.py`, `docs/board/BOARD.md`, with `regression/runner.py`
+absent from the diff.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m pytest -q` → `54 passed`
+(49 baseline on `openclaw/epic-003` + 5 new in `tests/test_mitigation.py`).
+`./.venv/bin/python -m pytest -q tests/test_mitigation.py -v` → `5 passed`
+standalone. `./.venv/bin/python -m examples.demo_a.run_demo` and
+`./.venv/bin/python -m examples.demo_c.run_demo` both still end `DECISION:
+SAFE_TO_REVIEW` (no regression; `mitigation.classify` has no callers).
+No `src/` file besides the new `mitigation.py` was touched; `regression/
+runner.py`'s `VerificationReport.decision` cascade was not edited.
+
+---
+
+## TASK t-010 — demo_h, the first `mitigation.classify` caller
+OWNER: developer   DEPENDS: t-009   BRANCH: openclaw/t-010 (base openclaw/t-009)
+OBJECTIVE: Add `examples/demo_h`, a new self-contained synthetic scenario
+where a real repair passes the regression gate
+(`verification.decision == "SAFE_TO_REVIEW"`) but only masks the root
+cause, so `mitigation.classify(trace, patch, verification)` (t-009) returns
+`MITIGATION_ONLY`, and `run_demo` surfaces that as a caution annotation
+alongside the `SAFE_TO_REVIEW` decision. Strictly additive -- no edits to
+`mitigation.py`, `regression/runner.py`, any existing demo, or any existing
+test.
+SCENARIO: `PoolExhaustionRaceScenario` -- a leaked-connection race under
+concurrent initialization intermittently exhausts a health-check worker's
+connection pool (`PoolExhaustedError`, ~1/3 of checks, content-independent),
+mirroring the structure of Demo A/C/E (same `clear_stale_retry_state`
+repair-ladder rung, reused verbatim, no planner/repair-engine change). The
+incident's failing step's `provenance` carries an independent
+`masks_root_cause=True` signal: clearing stale pool-lease state before a
+retry clears the regression gate but does not touch the leaked-connection
+race, so `classify` fires `MITIGATION_ONLY` even though the verdict is
+`SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_h/{__init__.py,scenario.py,run_demo.py}` (runnable via
+  `python -m examples.demo_h.run_demo`).
+- `tests/test_demo_h.py`, mirroring `tests/test_demo_e.py`'s structure plus
+  one additional assertion that `mitigation.classify` returns
+  `MITIGATION_ONLY` on the verified repair.
+- This BOARD.md entry.
+CONSTRAINTS: additive only; no edits to `src/agentdoctor/mitigation.py`,
+`src/agentdoctor/regression/runner.py`, any existing demo, or any existing
+test; no new third-party deps.
+ACCEPTANCE:
+- `./.venv/bin/python -m examples.demo_h.run_demo` ends `DECISION:
+  SAFE_TO_REVIEW` and additionally prints a `MITIGATION_ONLY` caution
+  annotation (from `mitigation.classify`).
+- `./.venv/bin/python -m pytest -q` → count strictly > 54 (includes
+  `test_demo_h.py`).
+- `./.venv/bin/python -m pytest -q tests/test_demo_h.py -v` passes
+  standalone.
+- `demo_a`/`demo_b`/`demo_c`/`demo_e` `run_demo` each still end `DECISION:
+  SAFE_TO_REVIEW`, unchanged.
+- `git show --stat HEAD` additive-only: only `examples/demo_h/*`,
+  `tests/test_demo_h.py`, `docs/board/BOARD.md`; nothing under `src/`
+  modified.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_h.run_demo`
+prints `DECISION: SAFE_TO_REVIEW` followed by `CAUTION: MITIGATION_ONLY --
+this repair clears the regression gate (SAFE_TO_REVIEW) but the incident
+trace reports it only masks the root cause`; `clear_stale_retry_state` is
+top-ranked (effect +0.36, 95% CI [+0.24, +0.48], excludes 0) and selected
+as the patch. Verify suite: original 35.00%→3.00%, variants 32.00%→3.00%,
+unrelated 5.00%→5.00% (delta +0.00%, no regression).
+`./.venv/bin/python -m pytest -q` → `58 passed` (54 baseline + 4 new in
+`tests/test_demo_h.py`). `./.venv/bin/python -m pytest -q
+tests/test_demo_h.py -v` → `4 passed` standalone.
+`./.venv/bin/python -m examples.demo_a.run_demo`, `.demo_b.`, `.demo_c.`,
+and `.demo_e.` all still end `DECISION: SAFE_TO_REVIEW` (no regression).
+No file under `src/` (including `mitigation.py` and `regression/runner.py`)
+or any existing demo/test was touched; only `examples/demo_h/*`,
+`tests/test_demo_h.py`, and this `docs/board/BOARD.md` entry were added.
