@@ -564,3 +564,88 @@ original 58.00%→3.00%, variants 54.00%→3.00%, unrelated 5.00%→5.00% (delta
 planner/repair-engine change was required; no files under `src/`,
 `examples/demo_a`, `examples/demo_b`, `examples/demo_c`, `examples/demo_d`,
 `examples/demo_e`, `trace/`, `replay/`, or `attribution/` were touched.
+
+---
+
+# BOARD — agent-doctor / EPIC-004 (mitigation-only annotation + demo_h)
+
+Baseline: **49 passed** is the floor, confirmed by running `pytest -q` on a
+clean checkout of `openclaw/epic-003` @ `cbfba37` before adding any files.
+It may only rise, never fall.
+
+Chain: **t-009** (this task, the pure `mitigation.classify` annotation, no
+callers) gates **t-010** (demo_h, which will be the first caller), both
+branched off `openclaw/epic-003`.
+
+Design notes that shaped the split:
+- `VerificationReport.decision` (spec section 14, `regression/runner.py`)
+  proves a patch clears the regression gate: the original incident improves,
+  variants don't overfit, and unrelated suites don't regress. That gate says
+  nothing about *why* the patch works -- a patch can silence the failing
+  symptom (e.g. widen a timeout, swallow an error, retry until it happens to
+  pass) without touching the upstream defect that produced the failure. t-009
+  adds a new, purely additive terminal annotation, `MITIGATION_ONLY`, that
+  flags exactly that case on top of an unmodified `SAFE_TO_REVIEW` verdict.
+- New module `src/agentdoctor/mitigation.py` adds one pure function,
+  `classify(trace, patch, verification) -> str | None`, mirroring
+  `environment.py`'s shape one stage later in the pipeline: it fires iff a
+  real repair exists and passed verification (`patch is not None` and
+  `verification.decision == "SAFE_TO_REVIEW"`) AND a step's existing
+  free-form `provenance` dict independently reports
+  `masks_root_cause=True` -- the same "two independent signals" precedence
+  pattern `environment.py` already uses (provenance signal independent of
+  the failure-rate math), just checked against the opposite side of the
+  gate (only *after* a clean SAFE_TO_REVIEW, not instead of it).
+- Reuse-first, strictly additive: no edit to `regression/runner.py` or its
+  `VerificationReport.decision` cascade, no new dataclass field on `Step`,
+  `Patch`, or `VerificationReport`. `mitigation.classify` has zero callers in
+  this task -- t-010's `demo_h` will be the first caller -- so it cannot
+  change any existing demo's output.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-009 | developer | none    | openclaw/t-009  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-009 — mitigation-only annotation, MITIGATION_ONLY
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-009 (base openclaw/epic-003)
+OBJECTIVE: Add a new, self-contained terminal annotation `MITIGATION_ONLY`
+that flags a real, regression-clean `SAFE_TO_REVIEW` repair which nonetheless
+only masks the symptom rather than fixing the root cause. Strictly additive
+-- no edits to `regression/runner.py`'s `VerificationReport.decision` cascade
+or any other existing `src/agentdoctor/*.py` file. No callers yet (t-010's
+demo_h will be the first).
+DELIVERABLES:
+- `src/agentdoctor/mitigation.py` (`MITIGATION_ONLY`, `classify()`).
+- `tests/test_mitigation.py` (unit tests for `classify()` in isolation: hand-
+  built `Trace`/`Patch`/`VerificationReport` fixtures, mirroring
+  `test_environment.py`'s structure).
+- This BOARD.md EPIC-004 section.
+CONSTRAINTS: additive only; no new third-party deps; do NOT change the
+behavior of demo_a, demo_b, demo_c, demo_d, demo_e, or any existing `src/`
+file, including `regression/runner.py`.
+ACCEPTANCE:
+- `pytest -q` passes, count strictly > 49 (baseline on `openclaw/epic-003`),
+  includes `test_mitigation.py`.
+- `pytest -q tests/test_mitigation.py -v` passes standalone (5 cases).
+- `demo_a`/`demo_b`/`demo_c`/`demo_e` `run_demo` all still end
+  `DECISION: SAFE_TO_REVIEW`, unchanged (mitigation has no callers).
+- `git show --stat HEAD` additive-only: exactly `src/agentdoctor/mitigation.py`,
+  `tests/test_mitigation.py`, `docs/board/BOARD.md`. `regression/runner.py` is
+  NOT in the diff.
+VERIFY (QA): in a hook-provisioned worktree off `openclaw/epic-003`,
+`pytest -q` → 54 passed (49 baseline + 5 new in `test_mitigation.py`);
+`pytest -q tests/test_mitigation.py -v` → 5 passed; `examples.demo_a` and
+`examples.demo_c` `run_demo` unchanged (still `SAFE_TO_REVIEW`); `git show
+--stat HEAD` shows only additive files under `src/agentdoctor/mitigation.py`,
+`tests/test_mitigation.py`, `docs/board/BOARD.md`, with `regression/runner.py`
+absent from the diff.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m pytest -q` → `54 passed`
+(49 baseline on `openclaw/epic-003` + 5 new in `tests/test_mitigation.py`).
+`./.venv/bin/python -m pytest -q tests/test_mitigation.py -v` → `5 passed`
+standalone. `./.venv/bin/python -m examples.demo_a.run_demo` and
+`./.venv/bin/python -m examples.demo_c.run_demo` both still end `DECISION:
+SAFE_TO_REVIEW` (no regression; `mitigation.classify` has no callers).
+No `src/` file besides the new `mitigation.py` was touched; `regression/
+runner.py`'s `VerificationReport.decision` cascade was not edited.
