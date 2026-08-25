@@ -378,3 +378,100 @@ while `normalize_latency:worker_build` and `model_swap` both show effect
 under `src/`, `examples/demo_a`, `examples/demo_b`, `examples/demo_c`,
 `trace/`, `replay/`, or `attribution/` were touched.
 DONE. reviewer APPROVED, qa PASS.
+
+---
+
+# BOARD — agent-doctor / EPIC-004 (demo_f unpropagated tool error)
+
+Baseline: **49 passed** is the floor (37 from EPIC-003's start + 8 across
+`tests/test_environment.py`, `tests/test_demo_d.py`, and
+`tests/test_demo_e.py`). It may only rise, never fall.
+
+Chain: **t-007** (demo_f), branched directly off `openclaw/epic-003`.
+
+Design notes that shaped the split:
+- demo_f models a fourth distinct incident class: an UNPROPAGATED TOOL
+  ERROR. A `fetch_shipment_status` tool call hard-errors, but the agent's
+  response loop never checks the step's `error` field before answering --
+  it proceeds anyway, falling back to a stale, previously-cached
+  observation, and confidently reports that stale status as the answer to
+  THIS request. The tool error never reaches the user; the agent simply
+  produces a wrong `final_output`.
+- Reuse-first, no new rule: the existing rule planner (V0) already proposes
+  a `clear_stale_retry_state` hypothesis whenever a trace shows a retry OR
+  an error/timeout signal (`rule_planner.py`'s `has_retry or
+  has_error_or_timeout or slow_tools` gate). Giving the failed
+  `fetch_shipment_status` step a real `error` string was enough to trigger
+  it -- no planner or repair-engine change was needed; both stay
+  byte-for-byte as EPIC-003 left them.
+- The only new semantics live in
+  `IgnoredToolErrorScenario.apply_intervention`, which interprets the
+  existing generic `InterventionSpec.retry_clear_stale_observation` field as
+  "halt on tool error and retry instead of silently answering from a stale
+  observation" -- the same field-reuse pattern demo_c (clear stale
+  retry/session state) and demo_e (refetch + rebase onto the true tip)
+  already use, each with its own scenario-local interpretation.
+  `normalize_latency:fetch_shipment_status` is intentionally left unwired,
+  so it measures `+0.00` (inconclusive) and `clear_stale_retry_state` wins
+  `best_repair()`'s risk-rank sort outright.
+- Honest framing: this is a mitigation (retry-before-answering discipline),
+  not a root-cause fix for whatever makes the upstream fulfillment API time
+  out on ~1/3 of calls.
+
+| Task  | Owner     | Depends | Branch          | Status      |
+|-------|-----------|---------|-----------------|-------------|
+| t-007 | developer | none    | openclaw/t-007  | READY_FOR_REVIEW |
+
+---
+
+## TASK t-007 — demo_f (unpropagated tool error), five stages, SAFE_TO_REVIEW
+OWNER: developer   DEPENDS: none   BRANCH: openclaw/t-007 (base openclaw/epic-003)
+OBJECTIVE: Reproduce, as a fully self-contained synthetic scenario, an
+UNPROPAGATED TOOL ERROR failure class: a tool call errors, the agent ignores
+it and proceeds, producing a wrong final answer. Drive all five stages
+Observe → Intervene → Attribute → Repair → Verify so the pipeline attributes
+this to a stale-observation-on-error cause and selects the existing,
+unmodified `clear_stale_retry_state` repair-ladder rung, ending `DECISION:
+SAFE_TO_REVIEW`.
+DELIVERABLES:
+- `examples/demo_f/__init__.py`, `examples/demo_f/scenario.py`,
+  `examples/demo_f/run_demo.py` (mirrors demo_c's/demo_e's structure and
+  CLI: `python -m examples.demo_f.run_demo`).
+- No planner or repair-engine changes -- the existing
+  `clear_stale_retry_state` rule and ladder rung (the same one demo_a,
+  demo_c, and demo_e already reuse) is reused as-is. The only new semantics
+  live in `IgnoredToolErrorScenario.apply_intervention`, which interprets
+  that intervention as "halt on tool error and retry instead of answering
+  from a stale observation", distinct from demo_c's and demo_e's own
+  interpretations of the same intervention spec.
+- This BOARD.md EPIC-004 section.
+CONSTRAINTS: no new third-party deps; no data/cassette files; do NOT change
+the behavior of demo_a, demo_b, demo_c, demo_d, demo_e, trace/, replay/,
+attribution/, planner/, repair/, regression/, or any `src/` file.
+ACCEPTANCE:
+- `python -m examples.demo_f.run_demo` runs all five stages and prints
+  `DECISION: SAFE_TO_REVIEW`, with `clear_stale_retry_state` top-ranked
+  (positive effect, 95% CI excludes 0) and selected as the patch, while the
+  unrelated regression-control suite's failure rate is essentially
+  unchanged (delta ~0).
+- `pytest -q` count stays at 49 (t-007 adds no new tests); the original 49
+  still pass; demo_a, demo_b, demo_c, demo_e run_demo all still end
+  `DECISION: SAFE_TO_REVIEW`, byte-for-byte unchanged behavior.
+VERIFY (QA): in a hook-provisioned worktree, `python -m examples.demo_f.run_demo`
+→ `SAFE_TO_REVIEW`; `pytest -q` → still 49 passed; `examples.demo_a`,
+`examples.demo_b`, `examples.demo_c`, `examples.demo_e` run_demo unchanged
+(still `SAFE_TO_REVIEW`); `git show --stat HEAD` shows only additive files
+under `examples/demo_f/` and `docs/board/BOARD.md`.
+STATUS: READY_FOR_REVIEW. `./.venv/bin/python -m examples.demo_f.run_demo`
+prints `DECISION: SAFE_TO_REVIEW`; `clear_stale_retry_state` is top-ranked
+(effect +0.37, 95% CI [+0.25, +0.49], excludes 0) and selected as the patch,
+while `normalize_latency:fetch_shipment_status` and `model_swap` both show
+effect +0.00 (inconclusive). Verify suite: original 36.50%→3.00%, variants
+32.00%→3.00%, unrelated 5.00%→5.00% (delta +0.00%, no regression).
+`./.venv/bin/python -m pytest -q` → `49 passed` (unchanged; t-007 adds no
+tests). `./.venv/bin/python -m examples.demo_a.run_demo`, `.demo_b.`,
+`.demo_c.`, and `.demo_e.` all still end `DECISION: SAFE_TO_REVIEW` (no
+regression). No planner/repair-engine change was required; no files under
+`src/`, `examples/demo_a`, `examples/demo_b`, `examples/demo_c`,
+`examples/demo_d`, `examples/demo_e`, `trace/`, `replay/`, or `attribution/`
+were touched.
